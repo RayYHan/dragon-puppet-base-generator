@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chained Alternating Trapezoids with Cap Segment and Rectangle</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+      .controls {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        min-width: 320px;
+      }
+      .control-group {
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+      }
+      .control-group:last-of-type {
+        border-bottom: none;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      .input-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 5px;
+      }
+      .input-row div {
+        flex: 1;
+      }
+      .input-row label {
+        font-weight: normal;
+        font-size: 12px;
+        color: #555;
+      }
+      input {
+        width: 100%;
+        padding: 6px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        background-color: #2c3e50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      button:hover {
+        background-color: #34495e;
+      }
+      canvas {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+    </style>
+  </head>
+  <body>
+
+    <h1>Chained Trapezoids with T5 Cap and Rectangle</h1>
+    <p>T1–T4 alternate dimensions with aligned small bases. T5 caps the chain using the outer leg of T4 as its long base. A rectangle is drawn using T4's shorter base as one side, with adjacent sides twice the shorter base of T3.</p>
+
+    <div class="container">
+      <div class="controls">
+        <!-- Trapezoid Height -->
+        <div class="control-group">
+          <label>Base width</label>
+          <input type="number" id="odd_b1" value="200">
+        </div>
+        
+        <div class="control-group">
+          <label style="color: #2980b9;">Top Part</label>
+          <div class="input-row">
+            <div>
+              <label>Length</label>
+              <input type="number" id="height" value="200">
+            </div>
+            <div>
+              <label>Open end height</label>
+              <input type="number" id="even_b1" value="100">
+            </div>
+            <div>
+              <label>Front end width</label>
+              <input type="number" id="odd_b2" value="50">
+            </div>
+            <div>
+              <label>Front end height</label>
+              <input type="number" id="even_b2" value="25">
+            </div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label style="color: #2980b9;">Bottom Part</label>
+          <div class="input-row">
+            <div>
+              <label>Length</label>
+              <input type="number" id="height_bot" value="150">
+            </div>
+            <div>
+              <label>Open end height</label>
+              <input type="number" id="even_b1_bot" value="50">
+            </div>
+            <div>
+              <label>Front end width</label>
+              <input type="number" id="odd_b2_bot" value="50">
+            </div>
+            <div>
+              <label>Front end height</label>
+              <input type="number" id="even_b2_bot" value="25">
+            </div>
+          </div>
+        </div>
+
+        <button onclick="drawChain()">Generate Chain</button>
+      </div>
+
+      <canvas id="chainCanvas" width="850" height="1100"></canvas>
+    </div>
+
+    <script>
+      const colors = { fill: 'rgba(52, 152, 219, 0.4)', stroke: '#2980b9' };
+
+      function generateShapeSet(startingPoint, height, oddB1, oddB2, evenB1, evenB2, canvas) {
+        const shapes = [];
+        let error = null;
+
+        // Initial setup for calculation
+        let ax = startingPoint['x'];
+        let ay = startingPoint['y'];
+
+        // Compute leg length from height and base dimensions for T1
+        const b1_T1 = oddB1;
+        const b2_T1 = oddB2;
+        const L1 = Math.sqrt(height * height + (b1_T1 - b2_T1) * (b1_T1 - b2_T1) / 4);
+
+        // First leg goes right and slightly down
+        let bx = ax + L1;
+        //let by = ay + height * 0.3;
+        let by = ay;
+
+        // Variables used for subsequent shapes
+        let lastUx = 0, lastUy = 0;
+
+        // 2a. Calculate Trapezoids 1 to 4
+        for (let i = 0; i < 4; i++) {
+          const isEvenIndex = (i % 2 !== 0);
+          const b1 = isEvenIndex ? evenB1 : oddB1;
+          const b2 = isEvenIndex ? evenB2 : oddB2;
+
+          const dx = bx - ax;
+          const dy = by - ay;
+          const L = Math.sqrt(dx * dx + dy * dy);
+
+          if (L === 0) {
+            error = `Error at T${i+1}: Leg length is 0.`;
+            break;
+          }
+
+          const cosAlpha = (b1 - b2) / (2 * L);
+          if (Math.abs(cosAlpha) > 1) {
+            error = `Error at T${i+1}: Leg length (${L.toFixed(1)}px) is too short for a base gap of ${Math.abs(b1 - b2)}px.`;
+            break;
+          }
+
+          const legAngle = Math.atan2(dy, dx);
+          const alpha = Math.acos(cosAlpha);
+
+          const baseAngle = legAngle + alpha;
+          lastUx = Math.cos(baseAngle);
+          lastUy = Math.sin(baseAngle);
+
+          const dX = ax + b1 * lastUx;
+          const cX = bx + b2 * lastUx;
+          const dY = ay + b1 * lastUy;
+          const cY = by + b2 * lastUy;
+
+          shapes.push({
+            type: 'trapezoid',
+            vertices: [
+              { x: ax, y: ay },
+              { x: bx, y: by },
+              { x: cX, y: cY },
+              { x: dX, y: dY }
+            ],
+            color: colors
+          });
+
+          // For next iteration
+          ax = dX;
+          ay = dY;
+          bx = cX;
+          by = cY;
+        }
+
+        if (error) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "red";
+          ctx.font = "16px Arial";
+          ctx.fillText(error, 20, 40);
+          return;
+        }
+
+        // 2b. Calculate Trapezoid 5 (Isosceles)
+        const dx5 = bx - ax;
+        const dy5 = by - ay;
+        const b1_t5 = Math.sqrt(dx5 * dx5 + dy5 * dy5);
+        const b2_t5 = 0.90 * b1_t5;
+        // For isosceles trapezoid: legs must be equal length
+        // The leg length is determined by the height and base difference
+        const h_t5 = 20;
+        const legLength_t5 = Math.sqrt(h_t5 * h_t5 + Math.pow((b1_t5 - b2_t5) / 2, 2));
+        const mx5 = (ax + bx) / 2;
+        const my5 = (ay + by) / 2;
+        const mx5_short = mx5 + h_t5 * lastUx;
+        const my5_short = my5 + h_t5 * lastUy;
+        const ux5 = dx5 / b1_t5;
+        const uy5 = dy5 / b1_t5;
+        const t5_x3 = mx5_short + (b2_t5 / 2) * ux5;
+        const t5_y3 = my5_short + (b2_t5 / 2) * uy5;
+        const t5_x4 = mx5_short - (b2_t5 / 2) * ux5;
+        const t5_y4 = my5_short - (b2_t5 / 2) * uy5;
+
+        shapes.push({
+          type: 'trapezoid',
+          vertices: [
+            { x: ax, y: ay },
+            { x: bx, y: by },
+            { x: t5_x3, y: t5_y3 },
+            { x: t5_x4, y: t5_y4 }
+          ],
+          color: colors
+        });
+
+        // 2c. Calculate Rectangle
+        const t4_shortBase = evenB2;
+        const t3_shortBase = oddB2;
+        const rectLongSide = 1.5 * t3_shortBase;
+        const t4_Bx = bx - t4_shortBase * lastUx;
+        const t4_By = by - t4_shortBase * lastUy;
+        const rectP0x = t4_Bx;
+        const rectP0y = t4_By;
+        const rectP1x = bx;
+        const rectP1y = by;
+        const legUnitX = -lastUy;
+        const legUnitY = lastUx;
+        const rectP2x = rectP1x - rectLongSide * legUnitX;
+        const rectP2y = rectP1y - rectLongSide * legUnitY;
+        const rectP3x = rectP0x - rectLongSide * legUnitX;
+        const rectP3y = rectP0y - rectLongSide * legUnitY;
+
+        shapes.push({
+          type: 'rectangle',
+          vertices: [
+            { x: rectP0x, y: rectP0y },
+            { x: rectP1x, y: rectP1y },
+            { x: rectP2x, y: rectP2y },
+            { x: rectP3x, y: rectP3y }
+          ],
+          color: colors
+        });
+
+        return shapes;
+      }
+
+      function rotateCoordinates(coordinates, centerPoint, angle) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const cx = centerPoint.x;
+        const cy = centerPoint.y;
+
+        const new_coords = coordinates.map(coord => {
+          // Translate point to origin (0,0 relative to centerPoint)
+          const dx = coord.x - cx;
+          const dy = coord.y - cy;
+
+          // Apply rotation matrix and translate back
+          return {
+            x: cx + (dx * cos - dy * sin),
+            y: cy + (dx * sin + dy * cos)
+          };
+        });
+        return new_coords;
+      }
+
+      function shiftCoordinates(coordinates, shift) {
+        return coordinates.map(coord => ({x: coord['x']+shift['x'], y: coord['y']+shift['y']}));
+      }
+
+      function findRotationAngle(vectors, targetAR = 17/22) {
+        let bestAngle = 0;
+        let minError = Infinity;
+
+        // Search from 0 to 90 degrees (in radians) to find the best bounding box fit
+        const steps = 30;
+        for (let i = 0; i < steps; i++) {
+          console.log(i);
+          const angle = (i * Math.PI) / 180;
+          console.log(angle)
+          const cosA = Math.cos(angle);
+          const sinA = Math.sin(angle);
+
+          let minX = Infinity, maxX = -Infinity;
+          let minY = Infinity, maxY = -Infinity;
+
+          // Simulate rotation for bounding box calculation
+          for (const {x, y} of vectors) {
+              const rx = x * cosA - y * sinA;
+              const ry = x * sinA + y * cosA;
+
+              if (rx < minX) minX = rx;
+              if (rx > maxX) maxX = rx;
+              if (ry < minY) minY = ry;
+              if (ry > maxY) maxY = ry;
+          }
+
+          const w = maxX - minX;
+          const h = maxY - minY;
+          const currentAR = w / h;
+          const error = Math.abs(currentAR - targetAR);
+
+          if (error < minError) {
+              minError = error;
+              bestAngle = angle;
+          }
+        }
+        console.log(bestAngle);
+
+        return bestAngle;
+      }
+
+      function drawChain() {
+        const canvas = document.getElementById('chainCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Get Inputs
+        const height = parseFloat(document.getElementById('height').value) || 80;
+        const oddB1 = parseFloat(document.getElementById('odd_b1').value);
+        const oddB2 = parseFloat(document.getElementById('odd_b2').value);
+        const evenB1 = parseFloat(document.getElementById('even_b1').value);
+        const evenB2 = parseFloat(document.getElementById('even_b2').value);
+
+        const topShapes = generateShapeSet({x: 200, y: 325}, height, oddB1, oddB2, evenB1, evenB2, canvas);
+        
+        const height_bot = parseFloat(document.getElementById('height_bot').value) || 80;
+        const oddB2_bot = parseFloat(document.getElementById('odd_b2_bot').value);
+        const evenB1_bot = parseFloat(document.getElementById('even_b1_bot').value);
+        const evenB2_bot = parseFloat(document.getElementById('even_b2_bot').value);
+
+        const botShapes = generateShapeSet({x: 200, y: 325}, height_bot, oddB1, oddB2_bot, evenB1_bot, evenB2_bot, canvas);
+        const u = [topShapes[2]['vertices'][3]['x'] - topShapes[2]['vertices'][0]['x'], topShapes[2]['vertices'][3]['y'] - topShapes[2]['vertices'][0]['y']];
+        const v = [botShapes[2]['vertices'][3]['x'] - botShapes[2]['vertices'][0]['x'], botShapes[2]['vertices'][3]['y'] - botShapes[2]['vertices'][0]['y']];
+        const sign = (u[0]*v[1]-u[1]*v[0]) > 0 ? -1 : 1;
+        const d = sign * Math.acos((u[0]*v[0]+u[1]*v[1])/(Math.sqrt(u[0]**2+u[1]**2)*Math.sqrt(v[0]**2+v[1]**2))) + Math.PI; 
+        const pivot = {x: (botShapes[2]['vertices'][3]['x'] + botShapes[2]['vertices'][0]['x'])/2, y: (botShapes[2]['vertices'][3]['y'] + botShapes[2]['vertices'][0]['y'])/2};
+        const center = {x: (topShapes[2]['vertices'][3]['x'] + topShapes[2]['vertices'][0]['x'])/2, y: (topShapes[2]['vertices'][3]['y'] + topShapes[2]['vertices'][0]['y'])/2};
+        const shift = {x: center['x'] - pivot['x'], y: center['y'] - pivot['y']};
+        botShapes.forEach(shape => shape['vertices'] = shiftCoordinates(rotateCoordinates(shape['vertices'], pivot, d), shift));
+        const shapes = topShapes.concat(botShapes);
+        const vertices = shapes.map(shape => shape.vertices).flat();
+        const angle = findRotationAngle(vertices);
+        shapes.forEach(shape => shape['vertices'] = rotateCoordinates(shape['vertices'], center, angle));
+        // 3. Drawing Phase
+        // 3a. Calculate Bounding Box
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        shapes.forEach(shape => {
+          shape.vertices.forEach(v => {
+            if (v.x < minX) minX = v.x;
+            if (v.x > maxX) maxX = v.x;
+            if (v.y < minY) minY = v.y;
+            if (v.y > maxY) maxY = v.y;
+          });
+        });
+
+        // 3b. Calculate Center and Scale
+        const contentWidth = maxX - minX;
+        const contentHeight = maxY - minY;
+        const canvasCenterX = canvas.width / 2;
+        const canvasCenterY = canvas.height / 2;
+        const contentCenterX = (minX + maxX) / 2;
+        const contentCenterY = (minY + maxY) / 2;
+
+        // 3c. Clear and Transform
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const padding = 50;
+        const scaleX = (canvas.width - padding * 2) / (contentWidth || 1);
+        const scaleY = (canvas.height - padding * 2) / (contentHeight || 1);
+        const scale = Math.min(scaleX, scaleY);
+        ctx.translate(canvasCenterX - contentCenterX, canvasCenterY - contentCenterY);
+        ctx.translate(contentCenterX, contentCenterY);
+        ctx.scale(scale, scale);
+        ctx.translate(-contentCenterX, -contentCenterY)
+
+        // 3d. Draw Shapes
+        shapes.forEach(shape => {
+          ctx.beginPath();
+          ctx.moveTo(shape.vertices[0].x, shape.vertices[0].y);
+          for (let i = 1; i < shape.vertices.length; i++) {
+            ctx.lineTo(shape.vertices[i].x, shape.vertices[i].y);
+          }
+          ctx.closePath();
+
+          ctx.fillStyle = shape.color.fill;
+          ctx.fill();
+          ctx.lineWidth = 3 / scale;
+        });
+      }
+    </script>
+  </body>
+</html>
