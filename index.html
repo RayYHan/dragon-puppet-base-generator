@@ -314,16 +314,16 @@
         return coordinates.map(coord => ({x: coord['x']+shift['x'], y: coord['y']+shift['y']}));
       }
 
-      function findRotationAngle(vectors, targetAR = 17/22) {
+      function findBestFit(shapes, canvas) {
         let bestAngle = 0;
-        let minError = Infinity;
+        let bestScale = 0;
+        let contentCenter = {x:0, y:0};
+        const padding = 50;
 
         // Search from 0 to 90 degrees (in radians) to find the best bounding box fit
-        const steps = 30;
+        const steps = 90;
         for (let i = 0; i < steps; i++) {
-          console.log(i);
           const angle = (i * Math.PI) / 180;
-          console.log(angle)
           const cosA = Math.cos(angle);
           const sinA = Math.sin(angle);
 
@@ -331,7 +331,8 @@
           let minY = Infinity, maxY = -Infinity;
 
           // Simulate rotation for bounding box calculation
-          for (const {x, y} of vectors) {
+          shapes.forEach(shape => {
+            shape.vertices.forEach(({x, y}) => {
               const rx = x * cosA - y * sinA;
               const ry = x * sinA + y * cosA;
 
@@ -339,21 +340,24 @@
               if (rx > maxX) maxX = rx;
               if (ry < minY) minY = ry;
               if (ry > maxY) maxY = ry;
-          }
+            })
+          })
 
           const w = maxX - minX;
           const h = maxY - minY;
-          const currentAR = w / h;
-          const error = Math.abs(currentAR - targetAR);
+          
+          const scaleX = (canvas.width - padding * 2) / (w || 1);
+          const scaleY = (canvas.height - padding * 2) / (h || 1);
+          const scale = Math.min(scaleX, scaleY);
 
-          if (error < minError) {
-              minError = error;
-              bestAngle = angle;
+          if (scale > bestScale) {
+            bestScale = scale;
+            bestAngle = angle;
+            contentCenter = {x: (minX + maxX) / 2, y: (minY + maxY) / 2};
           }
         }
-        console.log(bestAngle);
 
-        return bestAngle;
+        return {bestAngle, bestScale, contentCenter};
       }
 
       function drawChain() {
@@ -379,46 +383,29 @@
         const u = [topShapes[2]['vertices'][3]['x'] - topShapes[2]['vertices'][0]['x'], topShapes[2]['vertices'][3]['y'] - topShapes[2]['vertices'][0]['y']];
         const v = [botShapes[2]['vertices'][3]['x'] - botShapes[2]['vertices'][0]['x'], botShapes[2]['vertices'][3]['y'] - botShapes[2]['vertices'][0]['y']];
         const sign = (u[0]*v[1]-u[1]*v[0]) > 0 ? -1 : 1;
-        const d = sign * Math.acos((u[0]*v[0]+u[1]*v[1])/(Math.sqrt(u[0]**2+u[1]**2)*Math.sqrt(v[0]**2+v[1]**2))) + Math.PI; 
+        const d = sign * Math.acos((u[0]*v[0]+u[1]*v[1])/(Math.sqrt(u[0]**2+u[1]**2)*Math.sqrt(v[0]**2+v[1]**2)).toFixed(2)) + Math.PI; 
         const pivot = {x: (botShapes[2]['vertices'][3]['x'] + botShapes[2]['vertices'][0]['x'])/2, y: (botShapes[2]['vertices'][3]['y'] + botShapes[2]['vertices'][0]['y'])/2};
         const center = {x: (topShapes[2]['vertices'][3]['x'] + topShapes[2]['vertices'][0]['x'])/2, y: (topShapes[2]['vertices'][3]['y'] + topShapes[2]['vertices'][0]['y'])/2};
         const shift = {x: center['x'] - pivot['x'], y: center['y'] - pivot['y']};
         botShapes.forEach(shape => shape['vertices'] = shiftCoordinates(rotateCoordinates(shape['vertices'], pivot, d), shift));
         const shapes = topShapes.concat(botShapes);
-        const vertices = shapes.map(shape => shape.vertices).flat();
-        const angle = findRotationAngle(vertices);
-        shapes.forEach(shape => shape['vertices'] = rotateCoordinates(shape['vertices'], center, angle));
+        const {bestAngle, bestScale, contentCenter} = findBestFit(shapes, canvas);
+        shapes.forEach(shape => shape['vertices'] = rotateCoordinates(shape['vertices'], {x: 0,y: 0}, bestAngle));
         // 3. Drawing Phase
-        // 3a. Calculate Bounding Box
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        shapes.forEach(shape => {
-          shape.vertices.forEach(v => {
-            if (v.x < minX) minX = v.x;
-            if (v.x > maxX) maxX = v.x;
-            if (v.y < minY) minY = v.y;
-            if (v.y > maxY) maxY = v.y;
-          });
-        });
 
         // 3b. Calculate Center and Scale
-        const contentWidth = maxX - minX;
-        const contentHeight = maxY - minY;
         const canvasCenterX = canvas.width / 2;
         const canvasCenterY = canvas.height / 2;
-        const contentCenterX = (minX + maxX) / 2;
-        const contentCenterY = (minY + maxY) / 2;
+        const contentCenterX = contentCenter['x'];
+        const contentCenterY = contentCenter['y'];
 
         // 3c. Clear and Transform
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const padding = 50;
-        const scaleX = (canvas.width - padding * 2) / (contentWidth || 1);
-        const scaleY = (canvas.height - padding * 2) / (contentHeight || 1);
-        const scale = Math.min(scaleX, scaleY);
         ctx.translate(canvasCenterX - contentCenterX, canvasCenterY - contentCenterY);
         ctx.translate(contentCenterX, contentCenterY);
-        ctx.scale(scale, scale);
+        ctx.scale(bestScale, bestScale);
         ctx.translate(-contentCenterX, -contentCenterY)
 
         // 3d. Draw Shapes
@@ -432,7 +419,7 @@
 
           ctx.fillStyle = shape.color.fill;
           ctx.fill();
-          ctx.lineWidth = 3 / scale;
+          ctx.lineWidth = 3 / bestScale;
         });
       }
 
